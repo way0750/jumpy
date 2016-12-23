@@ -118,11 +118,32 @@ class JumpyView extends View
         atom.keymaps.keyBindings = @getFilteredJumpyKeys()
 
     toggle: ->
+        textEditor = atom.workspace.buildTextEditor()
+        userInputPanel = atom.workspace.addBottomPanel({ item: textEditor })
+
+        textEditorElement = $(textEditor.getElement())
+        textEditorElement.focus()
+        textEditorElement.on('blur', (e) -> userInputPanel.destroy())
+
+        oldActiveItem = atom.workspace.getActivePaneItem()
+        self = this
+        textEditor.onDidChange( (e) ->
+          text = textEditor.getText()
+          shouldSearch = text.length >= 2
+          if (shouldSearch)
+            text = text.replace(/\n*$/, '')
+            text = self.escapeString(text)
+            pattern = new RegExp (text), 'ig'
+            self.search(pattern)
+            userInputPanel.destroy()
+            oldActiveItem.getElement().focus()
+        )
+
+    search: (wordsPattern)->
         # Set dirty for @clearJumpMode
         @cleared = false
 
         # TODO: Can the following few lines be singleton'd up? ie. instance var?
-        wordsPattern = new RegExp (atom.config.get 'jumpy.matchPattern'), 'g'
         fontSize = atom.config.get 'jumpy.fontSize'
         fontSize = .75 if isNaN(fontSize) or fontSize > 1
         fontSize = (fontSize * 100) + '%'
