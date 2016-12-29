@@ -31,10 +31,17 @@ class JumpyView extends View
     @content: ->
         @div ''
 
-    initialize: ->
+    initialize: () ->
         @disposables = new CompositeDisposable()
         @decorations = []
         @commands = new CompositeDisposable()
+
+        @textEditor = atom.workspace.buildTextEditor()
+        @userInputPanel = atom.workspace.addModalPanel({ item: @textEditor, visible: false })
+        @textEditorElement = $(@textEditor.getElement())
+        @textEditorElement.keyup(@handleUserInput.bind(this))
+        @oldActiveItemElement = null
+        @textEditorElement.on('blur', @handleBackToWorkspace.bind(this))
 
         @commands.add atom.commands.add 'atom-workspace',
             'jumpy:toggle': => @toggle()
@@ -65,7 +72,6 @@ class JumpyView extends View
             @disposables.add atom.workspace.observeTextEditors (editor) =>
                 editorView = atom.views.getView(editor)
                 return if $(editorView).is ':not(:visible)'
-
                 for decoration in @decorations
                     element = decoration.getProperties().item
                     if element.textContent[labelPosition] == character
@@ -77,7 +83,7 @@ class JumpyView extends View
         labelPosition = (if not @firstChar then 0 else 1)
         if !isMatchOfCurrentLabels character, labelPosition
             @statusBarJumpy?.classList.add 'no-match'
-            @statusBarJumpyStatus?.innerHTML = 'No match!'
+            @statusBarJumpyStatus?.innerHTML = 'No Match!!!!!!!!'
             return
 
         if not @firstChar
@@ -117,33 +123,32 @@ class JumpyView extends View
     turnOffSlowKeys: ->
         atom.keymaps.keyBindings = @getFilteredJumpyKeys()
 
+    escapeString: (string)->
+      string.replace(/\W/g, (match) ->
+        "\\" + match
+      )
+
     toggle: ->
-        textEditor = atom.workspace.buildTextEditor()
-        userInputPanel = atom.workspace.addBottomPanel({ item: textEditor })
-
-        textEditorElement = $(textEditor.getElement())
-        textEditorElement.focus()
-        textEditorElement.on('blur', (e) -> userInputPanel.destroy())
-
-        oldActiveItem = atom.workspace.getActivePaneItem()
-        self = this
-        textEditor.onDidChange( (e) ->
-          text = textEditor.getText()
-          shouldSearch = text.length >= 2
-          if (shouldSearch)
-            text = text.replace(/\n*$/, '')
-            text = self.escapeString(text)
-            pattern = new RegExp (text), 'ig'
-            self.search(pattern)
-            userInputPanel.destroy()
-            oldActiveItem.getElement().focus()
-        )
+      # its job is now simply making the inputelement focused
+      # get input from it, escape it
+      # and call the serach function
+      # escaping out of the input should be done else where now
+      @textEditor.setText('')
+      @userInputPanel.show()
+      @textEditorElement.focus()
+      @oldActiveItemElement = atom
+        .workspace
+        .getActivePaneItem()
+        .getElement()
 
     search: (wordsPattern)->
+        @clearJumpMode()
+
         # Set dirty for @clearJumpMode
         @cleared = false
 
         # TODO: Can the following few lines be singleton'd up? ie. instance var?
+        # wordsPattern = new RegExp (atom.config.get 'jumpy.matchPattern'), 'g'
         fontSize = atom.config.get 'jumpy.fontSize'
         fontSize = .75 if isNaN(fontSize) or fontSize > 1
         fontSize = (fontSize * 100) + '%'
@@ -180,7 +185,6 @@ class JumpyView extends View
 
             drawLabels = (lineNumber, column) =>
                 return unless nextKeys.length
-
                 keyLabel = nextKeys.shift()
                 position = {row: lineNumber, column: column}
                 # creates a reference:
@@ -224,6 +228,31 @@ class JumpyView extends View
                                 drawLabels lineNumber, column
 
             @initializeClearEvents(editorView)
+
+        if (!@decorations.length)
+          @clearJumpMode()
+
+        @handleBackToWorkspace()
+
+    handleBackToWorkspace: () ->
+      if (@oldActiveItemElement)
+        @oldActiveItemElement.focus()
+        @oldActiveItemElement = null
+      @userInputPanel.hide()
+
+    handleUserInput: (e) ->
+        text = @textEditor.getText().replace(/\n+/g, '')
+        patternLength = atom.config.get 'jumpy.patternLength'
+        if (e.key == 'Enter' || text.length >= patternLength)
+          if (text.length > 0)
+            @handleBackToWorkspace()
+            text = @escapeString(text)
+            pattern = new RegExp (text), 'ig'
+            @search(pattern)
+        if (e.key == 'Enter' && !text.length)
+          @textEditor.setText('')
+        if (e.key == 'Escape')
+          @handleBackToWorkspace()
 
     clearJumpModeHandler: =>
         @clearJumpMode()

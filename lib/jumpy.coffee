@@ -20,10 +20,17 @@ module.exports =
             changes in Atom.'
             type: 'boolean'
             default: true
-        matchPattern:
-            description: 'Jumpy will create labels based on this pattern.'
-            type: 'string'
-            default: '([A-Z]+([0-9a-z])*)|[a-z0-9]{2,}'
+        patternLength:
+            description: 'Max length of pattern to search, minimum: 1, maximum: 2'
+            type: 'number'
+            default: 2
+            minimum: 1
+            maximum: 2
+        # matchPattern:
+        #    description: 'Jumpy will create labels based on this pattern.'
+        #    type: 'string'
+        #    default: '([A-Z]+([0-9a-z])*)|[a-z0-9]{2,}'
+
 
     activate: (state) ->
         @jumpyView = new JumpyView state.jumpyViewState
